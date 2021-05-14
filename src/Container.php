@@ -12,7 +12,7 @@ use Psr\Container\ContainerInterface;
 /**
  * An inversion of control container.
  */
-class Container implements ContainerInterface {
+class Container implements ContainerInterface, ContainerConfiguration {
     private $currentRule;
     private $currentRuleName;
     private $instances;
@@ -46,49 +46,19 @@ class Container implements ContainerInterface {
         $this->instances = [];
     }
 
-    /**
-     * Deep clone an array.
-     *
-     * @param array $array The array to clone.
-     * @return array Returns the cloned array.
-     * @see http://stackoverflow.com/a/17729234
-     */
-    private function arrayClone(array $array) {
-        return array_map(function ($element) {
-            return ((is_array($element))
-                ? $this->arrayClone($element)
-                : ((is_object($element))
-                    ? clone $element
-                    : $element
-                )
-            );
-        }, $array);
-    }
+    ///
+    /// ContainerConfiguration implementation.
+    ///
 
     /**
-     * Normalize a container entry ID.
-     *
-     * @param string $id The ID to normalize.
-     * @return string Returns a normalized ID as a string.
-     */
-    private function normalizeID($id) {
-        return ltrim($id, '\\');
-    }
-
-    /**
-     * Set the current rule to the default rule.
-     *
-     * @return $this
+     * @inheritDoc
      */
     public function defaultRule() {
         return $this->rule('*');
     }
 
     /**
-     * Set the current rule.
-     *
-     * @param string $id The ID of the rule.
-     * @return $this
+     * @inheritDoc
      */
     public function rule($id) {
         $id = $this->normalizeID($id);
@@ -103,41 +73,39 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Get the class name of the current rule.
-     *
-     * @return string Returns a class name.
+     * @inheritDoc
      */
-    public function getClass() {
+    public function hasRule(string $id): bool {
+        $id = $this->normalizeID($id);
+        return !empty($this->rules[$id]);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getClass(): string {
         return empty($this->currentRule['class']) ? '' : $this->currentRule['class'];
     }
 
     /**
-     * Set the name of the class for the current rule.
-     *
-     * @param string $className A valid class name.
-     * @return $this
+     * @inheritDoc
      */
-    public function setClass($className) {
+    public function setClass(string $className) {
         $this->currentRule['class'] = $className;
         return $this;
     }
 
     /**
-     * Get the rule that the current rule references.
-     *
-     * @return string Returns a reference name or an empty string if there is no reference.
+     * @inheritDoc
      */
-    public function getAliasOf() {
+    public function getAliasOf(): string {
         return empty($this->currentRule['aliasOf']) ? '' : $this->currentRule['aliasOf'];
     }
 
     /**
-     * Set the rule that the current rule is an alias of.
-     *
-     * @param string $alias The name of an entry in the container to point to.
-     * @return $this
+     * @inheritDoc
      */
-    public function setAliasOf($alias) {
+    public function setAliasOf(string $alias) {
         $alias = $this->normalizeID($alias);
 
         if ($alias === $this->currentRuleName) {
@@ -149,20 +117,9 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Add an alias of the current rule.
-     *
-     * Setting an alias to the current rule means that getting an item with the alias' name will be like getting the item
-     * with the current rule. If the current rule is shared then the same shared instance will be returned. You can add
-     * multiple aliases by passing additional arguments to this method.
-     *
-     * If {@link Container::addAlias()} is called with an alias that is the same as the current rule then an **E_USER_NOTICE**
-     * level error is raised and the alias is not added.
-     *
-     * @param string ...$alias The alias to set.
-     * @return $this
-     * @since 1.4 Added the ability to pass multiple aliases.
+     * @inheritDoc
      */
-    public function addAlias(...$alias) {
+    public function addAlias(string ...$alias) {
         foreach ($alias as $name) {
             $name = $this->normalizeID($name);
 
@@ -176,15 +133,9 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Remove an alias of the current rule.
-     *
-     * If {@link Container::removeAlias()} is called with an alias that references a different rule then an **E_USER_NOTICE**
-     * level error is raised, but the alias is still removed.
-     *
-     * @param string $alias The alias to remove.
-     * @return $this
+     * @inheritDoc
      */
-    public function removeAlias($alias) {
+    public function removeAlias(string $alias) {
         $alias = $this->normalizeID($alias);
 
         if (!empty($this->rules[$alias]['aliasOf']) && $this->rules[$alias]['aliasOf'] !== $this->currentRuleName) {
@@ -196,13 +147,9 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Get all of the aliases of the current rule.
-     *
-     * This method is intended to aid in debugging and should not be used in production as it walks the entire rule array.
-     *
-     * @return array Returns an array of strings representing aliases.
+     * @inheritDoc
      */
-    public function getAliases() {
+    public function getAliases(): array {
         $result = [];
 
         foreach ($this->rules as $name => $rule) {
@@ -215,79 +162,59 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Get the factory callback for the current rule.
-     *
-     * @return callable|null Returns the rule's factory or **null** if it has none.
+     * @inheritDoc
      */
-    public function getFactory() {
+    public function getFactory(): ?callable {
         return isset($this->currentRule['factory']) ? $this->currentRule['factory'] : null;
     }
 
     /**
-     * Set the factory that will be used to create the instance for the current rule.
-     *
-     * @param callable|null $factory This callback will be called to create the instance for the rule.
-     * @return $this
+     * @inheritDoc
      */
-    public function setFactory(callable $factory = null) {
+    public function setFactory(?callable $factory = null) {
         $this->currentRule['factory'] = $factory;
         return $this;
     }
 
     /**
-     * Whether or not the current rule is shared.
-     *
-     * @return bool Returns **true** if the rule is shared or **false** otherwise.
+     * @inheritDoc
      */
-    public function isShared() {
+    public function isShared(): bool {
         return !empty($this->currentRule['shared']);
     }
 
     /**
-     * Set whether or not the current rule is shared.
-     *
-     * @param bool $shared Whether or not the current rule is shared.
-     * @return $this
+     * @inheritDoc
      */
-    public function setShared($shared) {
+    public function setShared(bool $shared) {
         $this->currentRule['shared'] = $shared;
         return $this;
     }
 
     /**
-     * Whether or not the current rule will inherit to subclasses.
-     *
-     * @return bool Returns **true** if the current rule inherits or **false** otherwise.
+     * @inheritDoc
      */
-    public function getInherit() {
+    public function getInherit(): bool {
         return !empty($this->currentRule['inherit']);
     }
 
     /**
-     * Set whether or not the current rule extends to subclasses.
-     *
-     * @param bool $inherit Pass **true** to have subclasses inherit this rule or **false** otherwise.
-     * @return $this
+     * @inheritDoc
      */
-    public function setInherit($inherit) {
+    public function setInherit(bool $inherit) {
         $this->currentRule['inherit'] = $inherit;
         return $this;
     }
 
     /**
-     * Get the constructor arguments for the current rule.
-     *
-     * @return array Returns the constructor arguments for the current rule.
+     * @inheritDoc
      */
-    public function getConstructorArgs() {
+    public function getConstructorArgs(): array {
         return empty($this->currentRule['constructorArgs']) ? [] : $this->currentRule['constructorArgs'];
     }
 
     /**
-     * Set the constructor arguments for the current rule.
-     *
-     * @param array $args An array of constructor arguments.
-     * @return $this
+     * @inheritDoc
      */
     public function setConstructorArgs(array $args) {
         $this->currentRule['constructorArgs'] = $args;
@@ -295,28 +222,17 @@ class Container implements ContainerInterface {
     }
 
     /**
-     * Set a specific shared instance into the container.
-     *
-     * When you set an instance into the container then it will always be returned by subsequent retrievals, even if a
-     * rule is configured that says that instances should not be shared.
-     *
-     * @param string $name The name of the container entry.
-     * @param mixed $instance This instance.
-     * @return $this
+     * @inheritDoc
      */
-    public function setInstance($name, $instance) {
+    public function setInstance(string $name, $instance) {
         $this->instances[$this->normalizeID($name)] = $instance;
         return $this;
     }
 
     /**
-     * Add a method call to a rule.
-     *
-     * @param string $method The name of the method to call.
-     * @param array $args The arguments to pass to the method.
-     * @return $this
+     * @inheritDoc
      */
-    public function addCall($method, array $args = []) {
+    public function addCall(string $method, array $args = []) {
         $this->currentRule['calls'][] = [$method, $args];
 
         // Something added a rule. If we have any existing factories make sure we clear them.
@@ -326,6 +242,10 @@ class Container implements ContainerInterface {
 
         return $this;
     }
+
+    ///
+    /// Container implementation.
+    ///
 
     /**
      * Finds an entry of the container by its identifier and returns it.
@@ -359,6 +279,105 @@ class Container implements ContainerInterface {
         // The factory or instance isn't registered so do that now.
         // This call also caches the instance or factory fo faster access next time.
         return $this->createInstance($id, $args);
+    }
+
+    /**
+     * Call a callback with argument injection.
+     *
+     * @param callable $callback The callback to call.
+     * @param array $args Additional arguments to pass to the callback.
+     * @return mixed Returns the result of the callback.
+     * @throws ContainerException Throws an exception if the callback cannot be understood.
+     */
+    public function call(callable $callback, array $args = []) {
+        $instance = null;
+
+        if (is_array($callback)) {
+            $function = new \ReflectionMethod($callback[0], $callback[1]);
+
+            if (is_object($callback[0])) {
+                $instance = $callback[0];
+            }
+        } else {
+            $function = new \ReflectionFunction($callback);
+        }
+
+        $args = $this->resolveArgs($this->makeDefaultArgs($function, $args), [], $instance);
+
+        return call_user_func_array($callback, $args);
+    }
+
+    /**
+     * Returns true if the container can return an entry for the given identifier. Returns false otherwise.
+     *
+     * @param string $id Identifier of the entry to look for.
+     *
+     * @return boolean`
+     */
+    public function has($id) {
+        $id = $this->normalizeID($id);
+
+        return isset($this->instances[$id]) || !empty($this->rules[$id]) || class_exists($id);
+    }
+
+    /**
+     * Returns true if the container already has an instance for the given identifier. Returns false otherwise.
+     *
+     * @param string $id Identifier of the entry to look for.
+     *
+     * @return bool
+     */
+    public function hasInstance($id) {
+        $id = $this->normalizeID($id);
+
+        return isset($this->instances[$id]);
+    }
+
+    /**
+     * Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry to look for.
+     *
+     * @throws NotFoundException  No entry was found for this identifier.
+     * @throws ContainerException Error while retrieving the entry.
+     *
+     * @return mixed Entry.
+     */
+    public function get($id) {
+        return $this->getArgs($id);
+    }
+
+    ///
+    /// Private utilities.
+    ///
+
+    /**
+     * Deep clone an array.
+     *
+     * @param array $array The array to clone.
+     * @return array Returns the cloned array.
+     * @see http://stackoverflow.com/a/17729234
+     */
+    private function arrayClone(array $array) {
+        return array_map(function ($element) {
+            return ((is_array($element))
+                ? $this->arrayClone($element)
+                : ((is_object($element))
+                    ? clone $element
+                    : $element
+                )
+            );
+        }, $array);
+    }
+
+    /**
+     * Normalize a container entry ID.
+     *
+     * @param string $id The ID to normalize.
+     * @return string Returns a normalized ID as a string.
+     */
+    private function normalizeID($id) {
+        return ltrim($id, '\\');
     }
 
     /**
@@ -750,83 +769,6 @@ class Container implements ContainerInterface {
             $instance = $this->createSharedInstance($nid, $rule, $args);
         }
         return $instance;
-    }
-
-    /**
-     * Call a callback with argument injection.
-     *
-     * @param callable $callback The callback to call.
-     * @param array $args Additional arguments to pass to the callback.
-     * @return mixed Returns the result of the callback.
-     * @throws ContainerException Throws an exception if the callback cannot be understood.
-     */
-    public function call(callable $callback, array $args = []) {
-        $instance = null;
-
-        if (is_array($callback)) {
-            $function = new \ReflectionMethod($callback[0], $callback[1]);
-
-            if (is_object($callback[0])) {
-                $instance = $callback[0];
-            }
-        } else {
-            $function = new \ReflectionFunction($callback);
-        }
-
-        $args = $this->resolveArgs($this->makeDefaultArgs($function, $args), [], $instance);
-
-        return call_user_func_array($callback, $args);
-    }
-
-    /**
-     * Returns true if the container can return an entry for the given identifier. Returns false otherwise.
-     *
-     * @param string $id Identifier of the entry to look for.
-     *
-     * @return boolean
-     */
-    public function has($id) {
-        $id = $this->normalizeID($id);
-
-        return isset($this->instances[$id]) || !empty($this->rules[$id]) || class_exists($id);
-    }
-
-    /**
-     * Determines whether a rule has been defined at a given ID.
-     *
-     * @param string $id Identifier of the entry to look for.
-     * @return bool Returns **true** if a rule has been defined or **false** otherwise.
-     */
-    public function hasRule($id) {
-        $id = $this->normalizeID($id);
-        return !empty($this->rules[$id]);
-    }
-
-    /**
-     * Returns true if the container already has an instance for the given identifier. Returns false otherwise.
-     *
-     * @param string $id Identifier of the entry to look for.
-     *
-     * @return bool
-     */
-    public function hasInstance($id) {
-        $id = $this->normalizeID($id);
-
-        return isset($this->instances[$id]);
-    }
-
-    /**
-     * Finds an entry of the container by its identifier and returns it.
-     *
-     * @param string $id Identifier of the entry to look for.
-     *
-     * @throws NotFoundException  No entry was found for this identifier.
-     * @throws ContainerException Error while retrieving the entry.
-     *
-     * @return mixed Entry.
-     */
-    public function get($id) {
-        return $this->getArgs($id);
     }
 
     /**
